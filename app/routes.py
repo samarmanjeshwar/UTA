@@ -55,10 +55,49 @@ def login():
 
 @app.route("/enrollment", methods=['GET', 'POST'])
 def enrollment():
-  course_id = request.form.get('courseID')
+  courseID = request.form.get('courseID')
+  courseTitle = request.form.get('courseTitle')
+  userID = 2
+  if Enrolment.objects(user_id=userID, courseID=courseID):
+    flash("Opps! you are already enrolled for {}".format(courseTitle), "danger")
+  else:
+    Enrolment(user_id=userID, courseID=courseID)
+    flash("You have enrolled")
+  classes = list(User.objects.aggregate(*[
+    {
+        '$lookup': {
+            'from': 'enrolment', 
+            'localField': 'user_id', 
+            'foreignField': 'user_id', 
+            'as': 'r1'
+        }
+    }, {
+        '$unwind': {
+            'path': '$r1', 
+            'includeArrayIndex': 'r1.id', 
+            'preserveNullAndEmptyArrays': False
+        }
+    }, {
+        '$lookup': {
+            'from': 'course', 
+            'localField': 'r1.courseID', 
+            'foreignField': 'courseID', 
+            'as': 'classes'
+        }
+    }, {
+        '$unwind': {
+            'path': '$classes', 
+            'includeArrayIndex': 'string', 
+            'preserveNullAndEmptyArrays': False
+        }
+    }, {
+        '$match': {
+            'user_id': 2
+        }
+    }
+  ]))
   term = request.form.get('title')
-  title = request.form.get('term')
-  return render_template("enrollment.html", enrollment=True, data={'id': course_id, 'title': title, 'term': term})
+  return render_template("enrollment.html", enrollment=True, title="Enrollment", classes=classes)
 
 
 @app.route("/user")
