@@ -2,7 +2,7 @@ from app import app, db
 print(app)
 print(db)
 from flask import render_template
-from flask import request, Response, redirect, flash, url_for
+from flask import request, Response, redirect, flash, url_for, session
 import json
 from app.models import User, Course, Enrolment
 from app.forms import LoginForm, RegisterForm
@@ -39,6 +39,9 @@ def courses(term=2022):
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+  if session.get('username'):
+    return redirect(url_for('index'))
+
   form = LoginForm()
 
   if form.validate_on_submit():
@@ -48,20 +51,32 @@ def login():
     user = User.objects(email=email).first()
     if user and user.get_password_hash(password):
       flash("You are logged in", "success")
+      session['user_id'] = user.user_id
+      session['username'] = user.first_name
       return redirect("/index")
     else:
       flash("Something went wrong", "danger")
   return render_template("login.html", form=form, title="Login", login=True)
 
+
+@app.route("/logout")
+def logout():
+  session.pop('username', None)
+  return redirect(url_for('login'))
+
 @app.route("/enrollment", methods=['GET', 'POST'])
 def enrollment():
+  if not session.get('username'):
+    return redirect(url_for('login'))
   courseID = request.form.get('courseID')
   courseTitle = request.form.get('courseTitle')
-  userID = 2
+  userID = session.get('user_id')
   if Enrolment.objects(user_id=userID, courseID=courseID):
     flash("Opps! you are already enrolled for {}".format(courseTitle), "danger")
+  elif Enrolment.objects(user_id=userID, courseID=courseID) == None:
+    flash("You haven't registered for classes", "danger")
   else:
-    Enrolment(user_id=userID, courseID=courseID)
+    Enrolment(user_id=userID, courseID=courseID).save()
     flash("You have enrolled")
   classes = list(User.objects.aggregate(*[
     {
@@ -92,7 +107,7 @@ def enrollment():
         }
     }, {
         '$match': {
-            'user_id': 2
+            'user_id': userID
         }
     }
   ]))
